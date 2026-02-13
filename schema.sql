@@ -22,14 +22,20 @@ CREATE TABLE IF NOT EXISTS library_items (
     library_id UUID NOT NULL,
     media_type TEXT,
     title TEXT,
+    subtitle TEXT,
     author TEXT,
+    narrators TEXT[],    
     description TEXT,
     genres TEXT[], -- Array of text
     release_date TIMESTAMP WITH TIME ZONE,
+    published_year TEXT,
     feed_url TEXT,
     image_url TEXT,
     explicit BOOLEAN,
-    language TEXT
+    language TEXT,
+    publisher TEXT,
+    isbn TEXT,
+    asin TEXT
 );
 
 -- Listening Sessions Table

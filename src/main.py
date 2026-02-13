@@ -99,40 +99,68 @@ def upsert_device(cur, device_data):
         device_data.get('clientVersion')
     ))
 
-def upsert_library_item(cur, item_data, library_id, media_type):
-    # item_data is the 'mediaMetadata' object combined with top level info? 
-    # No, 'libraryItemId' is top level.
-    # Metadata is in 'mediaMetadata'.
-    
     meta = item_data.get('mediaMetadata', {})
     
-    # Parse release date
-    release_date = meta.get('releaseDate')
-    if not release_date:
-        release_date = None
-    
+    # Handle Author (could be string 'author' or list 'authors')
+    author = meta.get('author')
+    if not author and 'authors' in meta:
+        authors_list = meta.get('authors', [])
+        if authors_list:
+            # Extract names from list of dicts or strings
+            # Example: [{"id": "...", "name": "Naomi Alderman"}]
+            names = []
+            for a in authors_list:
+                if isinstance(a, dict):
+                    names.append(a.get('name', ''))
+                elif isinstance(a, str):
+                    names.append(a)
+            author = ", ".join(filter(None, names))
+
+    # Parse dates
+    release_date_str = meta.get('releaseDate') or meta.get('publishedDate')
+    # If it's a string, we might need parsing if it's not handled by driver. 
+    # Usually psycopg2 handles ISO strings for timestamps.
+    # If empty string, set to None
+    if not release_date_str:
+        release_date_str = None
+        
     cur.execute("""
-        INSERT INTO library_items (id, library_id, media_type, title, author, description, genres, release_date, feed_url, image_url, explicit, language)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO library_items (
+            id, library_id, media_type, title, subtitle, author, narrators, 
+            description, genres, release_date, published_year, 
+            feed_url, image_url, explicit, language, publisher, isbn, asin
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
+            subtitle = EXCLUDED.subtitle,
             author = EXCLUDED.author,
+            narrators = EXCLUDED.narrators,
             description = EXCLUDED.description,
             genres = EXCLUDED.genres,
-            image_url = EXCLUDED.image_url
+            image_url = EXCLUDED.image_url,
+            publisher = EXCLUDED.publisher,
+            isbn = EXCLUDED.isbn,
+            asin = EXCLUDED.asin
     """, (
         item_data.get('libraryItemId'),
         item_data.get('libraryId'),
         item_data.get('mediaType'),
         meta.get('title'),
-        meta.get('author'),
+        meta.get('subtitle'),
+        author,
+        meta.get('narrators'), # Array
         meta.get('description'),
-        meta.get('genres'), # List of strings, handled by psycopg2 adaptor
-        release_date,
+        meta.get('genres'),
+        release_date_str,
+        meta.get('publishedYear'),
         meta.get('feedUrl'),
         meta.get('imageUrl'),
         meta.get('explicit'),
-        meta.get('language')
+        meta.get('language'),
+        meta.get('publisher'),
+        meta.get('isbn'),
+        meta.get('asin')
     ))
 
 def session_exists(cur, session_id):
@@ -146,6 +174,17 @@ def process_synced_sessions(conn):
         logging.warning(f"Could not set client encoding to UTF8: {e}")
 
     cur = conn.cursor()
+    
+    # Check for REFRESH
+    if os.getenv("REFRESH", "").lower() == "true":
+        logging.warning("REFRESH=True detected. Truncating listening_sessions table...")
+        try:
+            cur.execute("TRUNCATE TABLE listening_sessions CASCADE;")
+            conn.commit()
+            logging.info("Table truncated. Starting fresh fetch.")
+        except Exception as e:
+            logging.error(f"Failed to truncate table: {e}")
+            conn.rollback()
     
     page = 0
     items_per_page = 20 # Can increase
