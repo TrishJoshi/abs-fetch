@@ -99,6 +99,8 @@ def upsert_device(cur, device_data):
         device_data.get('clientVersion')
     ))
 
+def upsert_library_item(cur, item_data, library_id, media_type):
+    
     meta = item_data.get('mediaMetadata', {})
     
     # Handle Author (could be string 'author' or list 'authors')
