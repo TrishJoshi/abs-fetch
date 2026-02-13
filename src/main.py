@@ -65,83 +65,79 @@ def fetch_sessions(page=0, items_per_page=50):
         exit(1)
 
 def upsert_user(cur, user_data):
-    try:
-        cur.execute("""
-            INSERT INTO users (id, username)
-            VALUES (%s, %s)
-            ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username
-        """, (user_data['id'], user_data['username']))
-    except Exception as e:
-        logging.error(f"Error upserting user: {e}")
+    cur.execute("""
+        INSERT INTO users (id, username)
+        VALUES (%s, %s)
+        ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username
+    """, (user_data['id'], user_data['username']))
 
 def upsert_device(cur, device_data):
-    try:
-        # device_data map keys: id, clientName, deviceName, model, manufacturer, clientVersion
-        # Note: JSON keys are camelCase, my DB is snake_case
-        cur.execute("""
-            INSERT INTO devices (id, client_name, device_name, model, manufacturer, client_version)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE SET
-                client_name = EXCLUDED.client_name,
-                device_name = EXCLUDED.device_name,
-                model = EXCLUDED.model,
-                manufacturer = EXCLUDED.manufacturer,
-                client_version = EXCLUDED.client_version
-        """, (
-            device_data.get('id'), # The inner deviceID or outer?
-            # In JSON: "deviceInfo": { "id": "...", "clientName": "...", ... }
-            # Wait, the JSON has `deviceInfo`.
-            device_data.get('clientName'),
-            device_data.get('deviceName'),
-            device_data.get('model'),
-            device_data.get('manufacturer'),
-            device_data.get('clientVersion')
-        ))
-    except Exception as e:
-        logging.error(f"Error upserting device: {e}")
+    # device_data map keys: id, clientName, deviceName, model, manufacturer, clientVersion
+    # Note: JSON keys are camelCase, my DB is snake_case
+    cur.execute("""
+        INSERT INTO devices (id, client_name, device_name, model, manufacturer, client_version)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (id) DO UPDATE SET
+            client_name = EXCLUDED.client_name,
+            device_name = EXCLUDED.device_name,
+            model = EXCLUDED.model,
+            manufacturer = EXCLUDED.manufacturer,
+            client_version = EXCLUDED.client_version
+    """, (
+        device_data.get('id'), # The inner deviceID or outer?
+        # In JSON: "deviceInfo": { "id": "...", "clientName": "...", ... }
+        # Wait, the JSON has `deviceInfo`.
+        device_data.get('clientName'),
+        device_data.get('deviceName'),
+        device_data.get('model'),
+        device_data.get('manufacturer'),
+        device_data.get('clientVersion')
+    ))
 
 def upsert_library_item(cur, item_data, library_id, media_type):
     # item_data is the 'mediaMetadata' object combined with top level info? 
     # No, 'libraryItemId' is top level.
     # Metadata is in 'mediaMetadata'.
     
-    try:
-        meta = item_data.get('mediaMetadata', {})
-        
-        # Parse release date
-        release_date = meta.get('releaseDate')
-        
-        cur.execute("""
-            INSERT INTO library_items (id, library_id, media_type, title, author, description, genres, release_date, feed_url, image_url, explicit, language)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE SET
-                title = EXCLUDED.title,
-                author = EXCLUDED.author,
-                description = EXCLUDED.description,
-                genres = EXCLUDED.genres,
-                image_url = EXCLUDED.image_url
-        """, (
-            item_data.get('libraryItemId'),
-            item_data.get('libraryId'),
-            item_data.get('mediaType'),
-            meta.get('title'),
-            meta.get('author'),
-            meta.get('description'),
-            meta.get('genres'), # List of strings, handled by psycopg2 adaptor
-            release_date,
-            meta.get('feedUrl'),
-            meta.get('imageUrl'),
-            meta.get('explicit'),
-            meta.get('language')
-        ))
-    except Exception as e:
-        logging.error(f"Error upserting library item: {e}")
+    meta = item_data.get('mediaMetadata', {})
+    
+    # Parse release date
+    release_date = meta.get('releaseDate')
+    
+    cur.execute("""
+        INSERT INTO library_items (id, library_id, media_type, title, author, description, genres, release_date, feed_url, image_url, explicit, language)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            author = EXCLUDED.author,
+            description = EXCLUDED.description,
+            genres = EXCLUDED.genres,
+            image_url = EXCLUDED.image_url
+    """, (
+        item_data.get('libraryItemId'),
+        item_data.get('libraryId'),
+        item_data.get('mediaType'),
+        meta.get('title'),
+        meta.get('author'),
+        meta.get('description'),
+        meta.get('genres'), # List of strings, handled by psycopg2 adaptor
+        release_date,
+        meta.get('feedUrl'),
+        meta.get('imageUrl'),
+        meta.get('explicit'),
+        meta.get('language')
+    ))
 
 def session_exists(cur, session_id):
     cur.execute("SELECT 1 FROM listening_sessions WHERE id = %s", (session_id,))
     return cur.fetchone() is not None
 
 def process_synced_sessions(conn):
+    try:
+        conn.set_client_encoding('UTF8')
+    except Exception as e:
+        logging.warning(f"Could not set client encoding to UTF8: {e}")
+
     cur = conn.cursor()
     
     page = 0
@@ -158,24 +154,27 @@ def process_synced_sessions(conn):
             break
             
         for session in sessions:
-            # Check if we have seen this session
-            if session_exists(cur, session['id']):
-                logging.info(f"Found existing session {session['id']}. Stopping fetch.")
-                stop_fetching = True
-                break
-            
-            # Upsert dependencies
-            if 'user' in session:
-                upsert_user(cur, session['user'])
-            
-            if 'deviceInfo' in session:
-                upsert_device(cur, session['deviceInfo'])
-                
-            if 'libraryItemId' in session:
-                upsert_library_item(cur, session, session.get('libraryId'), session.get('mediaType'))
-            
-            # Insert Session
+            # We use a savepoint or explicit transaction handling per session to avoid 
+            # one failure ruining the batch.
             try:
+                # Check if we have seen this session
+                # This check should be safe as it's a SELECT.
+                if session_exists(cur, session['id']):
+                    logging.info(f"Found existing session {session['id']}. Stopping fetch.")
+                    stop_fetching = True
+                    break
+                
+                # Upsert dependencies
+                if 'user' in session:
+                    upsert_user(cur, session['user'])
+                
+                if 'deviceInfo' in session:
+                    upsert_device(cur, session['deviceInfo'])
+                    
+                if 'libraryItemId' in session:
+                    upsert_library_item(cur, session, session.get('libraryId'), session.get('mediaType'))
+                
+                # Insert Session
                 cur.execute("""
                     INSERT INTO listening_sessions (
                         id, user_id, library_item_id, episode_id, device_id,
@@ -205,10 +204,16 @@ def process_synced_sessions(conn):
                     session.get('date'),
                     session.get('dayOfWeek')
                 ))
-            except Exception as e:
-                logging.error(f"Error inserting session {session['id']}: {e}")
                 
-        conn.commit()
+                # Commit successful session
+                conn.commit()
+                
+            except Exception as e:
+                logging.error(f"Error processing session {session.get('id')}: {e}")
+                conn.rollback() 
+                # Provide more context if possible
+                continue
+
         if stop_fetching:
             break
             
