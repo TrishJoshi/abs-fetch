@@ -1,0 +1,15 @@
+[Unit]
+Description=Audiobookshelf Fetch Service
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/sri/Documents/personal/abs-fetch/src
+ExecStart=/home/sri/Documents/personal/abs-fetch/.venv/bin/python main.py
+EnvironmentFile=/home/sri/Documents/personal/abs-fetch/.env
+# Use environment variables from file. 
+# Ensure DB_CONNECTION_STRING, ABS_API_URL, ABS_API_TOKEN, ABS_USER_ID are set in .env
+
+[Install]
+WantedBy=multi-user.target

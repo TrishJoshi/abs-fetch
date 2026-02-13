@@ -1,0 +1,12 @@
+[Unit]
+Description=Timer for Audiobookshelf Fetch Service
+
+[Timer]
+# Run 5 minutes after boot
+OnBootSec=5min
+# Run every 15 minutes thereafter
+OnUnitActiveSec=15min
+Unit=abs-fetch.service
+
+[Install]
+WantedBy=timers.target
