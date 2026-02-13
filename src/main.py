@@ -108,6 +108,8 @@ def upsert_library_item(cur, item_data, library_id, media_type):
     
     # Parse release date
     release_date = meta.get('releaseDate')
+    if not release_date:
+        release_date = None
     
     cur.execute("""
         INSERT INTO library_items (id, library_id, media_type, title, author, description, genres, release_date, feed_url, image_url, explicit, language)
@@ -206,7 +208,7 @@ def process_synced_sessions(conn):
                     session.get('currentTime'),
                     ms_to_datetime(session.get('startedAt')),
                     ms_to_datetime(session.get('updatedAt')),
-                    session.get('date'),
+                    session.get('date') or None,
                     session.get('dayOfWeek')
                 ))
                 
