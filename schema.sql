@@ -48,9 +48,8 @@ CREATE TABLE IF NOT EXISTS listening_sessions (
     start_offset FLOAT, -- mapped from startTime
     media_progress FLOAT, -- mapped from currentTime
     
-    started_at BIGINT, -- Raw epoch ms
-    updated_at BIGINT, -- Raw epoch ms
-    started_at_ts TIMESTAMP WITH TIME ZONE GENERATED ALWAYS AS (to_timestamp(started_at / 1000.0)) STORED,
+    started_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE,
     
     date_log DATE, -- mapped from 'date' string if needed, or derived from started_at
     day_of_week TEXT

@@ -2,7 +2,7 @@ import os
 import requests
 import psycopg2
 from psycopg2.extras import Json
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import logging
 
@@ -15,6 +15,11 @@ def get_env_variable(var_name, default=None):
         logging.error(f"Environment variable {var_name} is not set.")
         exit(1)
     return val
+
+def ms_to_datetime(epoch_ms):
+    if epoch_ms is not None:
+        return datetime.fromtimestamp(epoch_ms / 1000.0, tz=timezone.utc)
+    return None
 
 # Configuration
 DB_CONN_STR = get_env_variable("DB_CONNECTION_STRING")
@@ -199,8 +204,8 @@ def process_synced_sessions(conn):
                     session.get('timeListening'),
                     session.get('startTime'),
                     session.get('currentTime'),
-                    session.get('startedAt'),
-                    session.get('updatedAt'),
+                    ms_to_datetime(session.get('startedAt')),
+                    ms_to_datetime(session.get('updatedAt')),
                     session.get('date'),
                     session.get('dayOfWeek')
                 ))
