@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h2>Listening Timeline</h2>
+        <span style="color: var(--text-secondary); font-size: 0.9rem;">
+            Shows the span between first and last listen per book
+        </span>
+    </div>
+    <div id="chart"></div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const rawData = {{ chart_data | tojson
+    }};
+
+    // Prepare series data for ApexCharts rangeBar
+    const seriesData = rawData.map(item => {
+        return {
+            x: item.x,
+            y: item.y,
+            // Add extra info for tooltip if needed
+            goals: [
+                {
+                    value: item.y[1], // Marker at the end? Maybe not needed for simple range
+                    strokeHeight: 0,
+                    strokeLineCap: 'round',
+                    strokeColor: '#775DD0'
+                }
+            ]
+        };
+    });
+
+    var options = {
+        series: [
+            {
+                data: seriesData
+            }
+        ],
+        chart: {
+            height: 800, // Adjust based on number of items?
+            type: 'rangeBar',
+            background: 'transparent',
+            toolbar: {
+                show: false
+            }
+        },
+        plotOptions: {
+            bar: {
+                horizontal: true,
+                barHeight: '50%',
+                rangeBarGroupRows: true
+            }
+        },
+        colors: ['#38bdf8'],
+        fill: {
+            type: 'gradient',
+            gradient: {
+                shade: 'dark',
+                type: 'horizontal',
+                shadeIntensity: 0.5,
+                gradientToColors: ['#818cf8'],
+                inverseColors: true,
+                opacityFrom: 1,
+                opacityTo: 1,
+                stops: [0, 100]
+            }
+        },
+        dataLabels: {
+            enabled: true,
+            formatter: function (val, opts) {
+                var label = opts.w.globals.labels[opts.dataPointIndex];
+                var a = new Date(val[0]);
+                var b = new Date(val[1]);
+                // Calculate difference in days
+                var diffTime = Math.abs(b - a);
+                var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays + (diffDays === 1 ? ' day' : ' days');
+            },
+            style: {
+                colors: ['#fff'],
+                fontSize: '10px'
+            }
+        },
+        xaxis: {
+            type: 'datetime',
+            labels: {
+                style: {
+                    colors: '#94a3b8'
+                }
+            },
+            axisBorder: {
+                show: false
+            },
+            axisTicks: {
+                show: false
+            }
+        },
+        yaxis: {
+            labels: {
+                style: {
+                    colors: '#f8fafc',
+                    fontSize: '13px'
+                },
+                maxWidth: 400
+            }
+        },
+        grid: {
+            borderColor: '#334155',
+            strokeDashArray: 4,
+            yaxis: {
+                lines: {
+                    show: true
+                }
+            }
+        },
+        tooltip: {
+            theme: 'dark',
+            x: {
+                format: 'dd MMM yyyy'
+            }
+        },
+        theme: {
+            mode: 'dark'
+        }
+    };
+
+    var chart = new ApexCharts(document.querySelector("#chart"), options);
+    chart.render();
+    });
+</script>
+{% endblock %}

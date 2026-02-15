@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="text-align: center; padding-top: 4rem;">
+    <h1>Welcome to ABS Fetch Stats</h1>
+    <p style="color: var(--text-secondary); max-width: 600px; margin: 1rem auto;">
+        Visualize your Audiobookshelf listening habits with beautiful, interactive charts.
+        Start by checking out the timeline of your listening sessions.
+    </p>
+    <a href="{{ url_for('timeline.show_timeline') }}" class="btn" style="margin-top: 2rem;">
+        View Timeline
+    </a>
+</div>
+{% endblock %}
