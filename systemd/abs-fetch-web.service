@@ -1,0 +1,16 @@
+[Unit]
+Description=ABS Fetch Web Service
+After=network.target
+
+[Service]
+User=sri
+WorkingDirectory=/home/sri/Documents/personal/abs-fetch
+# PATH needs to include the location of gunicorn, e.g., /home/sri/.local/bin or the venv bin
+Environment="PATH=/home/sri/.local/bin:/usr/local/bin:/usr/bin:/bin"
+# ExecStart command. Adjust the path to gunicorn if using a virtual environment
+ExecStart=/home/sri/.local/bin/gunicorn -w 4 -b 0.0.0.0:5001 "src.web.app:app"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
